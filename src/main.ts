@@ -5,7 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: ['https://70a6-2401-4900-1c80-ecfa-94d8-de4f-3bdb-8477.ngrok-free.app'], // or use your ngrok domain here
+    origin: ['*'], // or use your ngrok domain here
     credentials: true,
   });
 

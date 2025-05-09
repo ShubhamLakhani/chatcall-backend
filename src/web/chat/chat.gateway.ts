@@ -13,7 +13,7 @@ import { User } from 'src/schemas/user/user.schema';
 import { ChatService } from './chat.service';
 
 @WebSocketGateway({ cors: {
-  origin: ['https://70a6-2401-4900-1c80-ecfa-94d8-de4f-3bdb-8477.ngrok-free.app'], // or same exact ngrok domain
+  origin: ['*'], // or same exact ngrok domain
   credentials: true,
 }, })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {

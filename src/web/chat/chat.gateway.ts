@@ -60,9 +60,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (room) {
         this.matchedUsers.add(room.user1);
         this.matchedUsers.add(room.user2);
-        client.emit('matched', { chatRoomId: room._id, initiator: true,  });
+        client.emit('matched', { chatRoomId: room._id, initiator: true, moduleType: data.moduleType });
         const partnerId = room.user1 === client.id ? room.user2 : room.user1;
-        client.to(partnerId).emit('matched', { chatRoomId: room._id, initiator: false });
+        client.to(partnerId).emit('matched', { chatRoomId: room._id, initiator: false, moduleType: data.moduleType });
         return true;
       }
       return false;
@@ -109,6 +109,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.chatRoomId,
     );
     if (receiver) {
+      await this.chatService.saveMessage({
+        chatRoomId: data.chatRoomId,
+        sender: client.id,
+        receiver,
+        content: data.content,
+      });
       if (this.matchedUsers.has(receiver)) {
         client.to(receiver).emit('receive-message', {
           content: data.content,
@@ -121,6 +127,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           data: null,
         });
       }
+    }
+  }
+
+  @SubscribeMessage('typing')
+  async onTyping(
+    @MessageBody() data: { chatRoomId: string }, 
+    @ConnectedSocket() client: Socket
+  ) {
+    const receiver = await this.chatService.getReceiver(client.id, data.chatRoomId);
+    if (receiver) this.server.to(receiver).emit('typing', { from: client.id });
+  }
+
+  @SubscribeMessage('stop-typing')
+  async onStopTyping(@MessageBody() data: { chatRoomId: string }, @ConnectedSocket() client: Socket) {
+    const receiver = await this.chatService.getReceiver(client.id, data.chatRoomId);
+    if (receiver) this.server.to(receiver).emit('stop-typing', { from: client.id });
+  }
+
+  @SubscribeMessage('mark-read')
+  async onMarkRead(@MessageBody() data: { chatRoomId: string }, @ConnectedSocket() client: Socket) {
+    await this.chatService.markMessagesAsRead(data.chatRoomId, client.id);
+    const receiver = await this.chatService.getReceiver(client.id, data.chatRoomId);
+    if (receiver) {
+      this.server.to(receiver).emit('messages-read', { from: client.id });
     }
   }
 

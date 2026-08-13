@@ -4,17 +4,23 @@ import { ModuleType } from 'src/enums';
 
 @Schema()
 export class User extends MongoSchema {
-  @Prop({ required: true })
+  @Prop({ type: String })
   socketId: string;
 
-  @Prop({ default: false })
+  @Prop({ type: Boolean, default: false })
   isMatched: boolean;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   deviceId: string;
 
-  @Prop({ default: ModuleType.chat })
+  @Prop({ type: String, default: ModuleType.chat })
   moduleType: ModuleType;
+
+  @Prop({ type: String })
+  email: string;
+
+  @Prop({ type: String })
+  password: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

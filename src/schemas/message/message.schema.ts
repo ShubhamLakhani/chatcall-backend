@@ -14,6 +14,12 @@ export class Message extends MongoSchema {
 
   @Prop()
   chatRoomId: string;
+
+  @Prop({ default: false })
+  read: boolean;
+
+  @Prop()
+  readAt?: Date;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

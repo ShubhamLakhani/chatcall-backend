@@ -1,98 +1,76 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Cashual Call (Backend) ⚙️🔌
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+> The scalable real-time matchmaking engine and signaling gateway for Cashual Call.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+[![NestJS](https://img.shields.io/badge/NestJS-11.0-red?style=flat-square&logo=nestjs)](https://nestjs.com)
+[![Mongoose](https://img.shields.io/badge/Mongoose-8.13-green?style=flat-square&logo=mongodb)](https://mongoosejs.com)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-010101?style=flat-square&logo=socket.io)](https://socket.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
+[![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat-square&logo=swagger)](https://swagger.io)
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 🌟 Key Features
 
-## Project setup
+*   **⚡ WebSocket Matchmaking Engine**: Places waiting users into a matchmaking pool and pairs them based on platform type (`chat` vs `voice-call`), verifying block relationships.
+*   **🎙️ WebRTC Signaling Gateways**: Broadcasts connection offers, SDP descriptions, and ICE candidates between matched calls.
+*   **💬 Persistent Chat Handling**: Stores and processes real-time text chats with built-in delivery statuses, seen flags, and read time logging.
+*   **🛡️ Multi-Tier User Protection**: Provides robust mechanisms for checking block statuses and handling user reporting.
+*   **🔒 Secure Identity & Access**: Fully custom user registration and authentication endpoints using `bcrypt` and JWT keys.
 
-```bash
-$ npm install
+---
+
+## 🏗️ Technical Highlights & Architecture
+
+The backend is built as a progressive **NestJS** application leveraging structured dependency injection:
+
+*   **Matchmaking Aggregation Pipeline**: Employs a complex MongoDB aggregation query to match candidates. The pipeline queries the `blockedusers` collection, filters out candidates that block the requester or are blocked by them, and selects a random candidate (`$sample: { size: 1 }`).
+*   **WebSocket Event Broker**: Uses modular socket gateways (`ChatGateway`, `BlockedUserGateway`, `ReportUserGateway`) that bind decorators directly to socket instances.
+*   **Auto-Documentation**: Auto-generates comprehensive OpenAPI documentation using `@nestjs/swagger`, accessible at `/api-docs`.
+
+---
+
+## ⚙️ Local Setup Instructions
+
+### Prerequisites
+*   Node.js (v18.x or later)
+*   npm (v10.x or later)
+*   MongoDB Instance (local server or Atlas cluster)
+
+### Step-by-Step Installation
+1.  **Clone the repository** and navigate to the project directory:
+    ```bash
+    cd chatcall-backend
+    ```
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    ```
+3.  **Configure environment variables**:
+    Create a `.env` file in the root of the project (copying from `.env.example`):
+    ```bash
+    cp .env.example .env
+    ```
+4.  **Run the development server**:
+    ```bash
+    npm run start:dev
+    ```
+5.  Access the API documentation at [http://localhost:3001/api-docs](http://localhost:3001/api-docs).
+
+---
+
+## 🔌 Environment Variables
+
+```env
+# Port number the server will listen on
+PORT=3001
+
+# MongoDB Atlas connection string
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/chat-app
+
+# JWT Sign/Verification secret key
+JWT_SECRET=your-secret-key
+
+# Client CORS URL
+CORS_ORIGIN=http://localhost:3000
 ```
-
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

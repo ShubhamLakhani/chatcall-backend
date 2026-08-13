@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Socket } from 'socket.io';
+import { BlockedUserModelService } from 'src/schemas/blockedUser/blockedUser.service';
 import { ChatRoom } from 'src/schemas/chatRoom/chatRoom.schema';
 import { ChatRoomModelService } from 'src/schemas/chatRoom/chatRoom.service';
+import { Message } from 'src/schemas/message/message.schema';
+import { MessageModelService } from 'src/schemas/message/message.service';
 import { User } from 'src/schemas/user/user.schema';
 import { UserModelService } from 'src/schemas/user/user.service';
 
@@ -10,10 +13,20 @@ export class ChatService {
   constructor(
     private userModelService: UserModelService,
     private chatRoomModelService: ChatRoomModelService,
+    private messageModelService: MessageModelService,
+    private blockedUserModelService: BlockedUserModelService,
   ) {}
 
   async registerUser(value: User): Promise<User> {
     return this.userModelService.craeteUser(value);
+  }
+
+  async saveMessage(payload: Partial<Message>) {
+    return this.messageModelService.saveMessage(payload);
+  }
+
+  async markMessagesAsRead(chatRoomId: string, userId: string) {
+    return this.messageModelService.markMessagesAsRead(chatRoomId, userId);
   }
 
   async findMatch(socketId: string, data: User): Promise<ChatRoom | null> {

@@ -15,6 +15,14 @@ export class UserModelService {
     return this.userModel.create(value);
   }
 
+  create(value: Partial<User>): Promise<User> {
+    return this.userModel.create(value);
+  }
+
+  findByEmail(email: string): Promise<User | null> {
+    return this.userModel.findOne({ email }).exec();
+  }
+
   finedUserBySocketId(
     socketId: string,
     moduleType: ModuleType,

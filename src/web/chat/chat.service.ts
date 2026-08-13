@@ -124,4 +124,20 @@ export class ChatService {
   getUserById(id: string) {
     return this.userModelService.finedUserById(id);
   }
+
+  sendFriendRequest(fromUserId: string, toUserId: string) {
+    return this.userModelService.sendFriendRequest(fromUserId, toUserId);
+  }
+
+  acceptFriendRequest(userId: string, targetUserId: string) {
+    return this.userModelService.acceptFriendRequest(userId, targetUserId);
+  }
+
+  declineFriendRequest(userId: string, targetUserId: string) {
+    return this.userModelService.declineFriendRequest(userId, targetUserId);
+  }
+
+  addCallReward(userId: string) {
+    return this.userModelService.addCallReward(userId);
+  }
 }

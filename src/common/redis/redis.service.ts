@@ -7,9 +7,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis;
 
-  constructor(private readonly configService: ConfigService) {}
-
-  onModuleInit() {
+  constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>('REDIS_HOST') || 'localhost';
     const port = parseInt(this.configService.get<string>('REDIS_PORT') || '6379', 10);
     const password = this.configService.get<string>('REDIS_PASSWORD') || undefined;
@@ -31,6 +29,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Redis connection error:', err);
     });
   }
+
+  onModuleInit() {}
 
   onModuleDestroy() {
     this.logger.log('Disconnecting from Redis...');

@@ -13,6 +13,7 @@ import { User } from 'src/schemas/user/user.schema';
 import { ChatService } from './chat.service';
 import { MatchmakingQueueService } from 'src/common/redis/matchmaking-queue.service';
 import { Types } from 'mongoose';
+import { ICEBREAKERS } from 'src/common/constants/icebreakers';
 
 @WebSocketGateway({ cors: {
   origin: ['*'], // or same exact ngrok domain
@@ -144,11 +145,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     const tags = (data as any).tags || [];
     const isShadowbanned = client.data.userInfo.isShadowbanned || false;
 
+    const fromUsername = client.data.userInfo.username || client.data.userInfo.email || 'Anonymous';
+
     // 2. Add user to matchmaking queue (registers their metadata in Redis)
     await this.matchmakingQueueService.addToQueue(userId, client.id, {
       moduleType,
       tags,
       isShadowbanned,
+      username: fromUsername,
     });
 
     // 3. Attempt to find a match instantly from the Redis matchmaking queue
@@ -165,9 +169,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       // Pre-generate a unique Mongo ObjectId for the chat room
       const chatRoomId = new Types.ObjectId().toString();
 
-      // Instantly emit matched event to both users
-      client.emit('matched', { chatRoomId, initiator: true, moduleType });
-      client.to(partnerMeta.socketId).emit('matched', { chatRoomId, initiator: false, moduleType });
+      // Choose a random icebreaker
+      const icebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
+
+      // Instantly emit matched event to both users, passing partner ID, username, and icebreaker prompt
+      client.emit('matched', {
+        chatRoomId,
+        initiator: true,
+        moduleType,
+        icebreaker,
+        partner: {
+          _id: partnerMeta.userId,
+          username: partnerMeta.username,
+        },
+      });
+      client.to(partnerMeta.socketId).emit('matched', {
+        chatRoomId,
+        initiator: false,
+        moduleType,
+        icebreaker,
+        partner: {
+          _id: userId,
+          username: fromUsername,
+        },
+      });
 
       // Perform MongoDB writes asynchronously in the background
       void (async () => {
@@ -209,6 +234,90 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       client.emit('verify-captcha-response', { success: true });
     } else {
       client.emit('verify-captcha-response', { success: false, error: 'Invalid token' });
+    }
+  }
+
+  @SubscribeMessage('send-friend-request')
+  async onSendFriendRequest(
+    @MessageBody() data: { targetUserId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (!userId) return;
+
+    const fromUsername = client.data.userInfo.username || client.data.userInfo.email || 'Anonymous';
+    
+    // Save in DB
+    await this.chatService.sendFriendRequest(userId, data.targetUserId);
+
+    // Retrieve target user socket ID to emit notification
+    const targetUser = await this.chatService.getUserById(data.targetUserId);
+    if (targetUser && targetUser.socketId) {
+      console.log(`[FRIEND] Directing friend request from ${userId} to target socket: ${targetUser.socketId}`);
+      this.server.to(targetUser.socketId).emit('friend-request-received', {
+        fromUser: {
+          _id: userId,
+          username: fromUsername,
+        },
+      });
+    }
+  }
+
+  @SubscribeMessage('accept-friend-request')
+  async onAcceptFriendRequest(
+    @MessageBody() data: { targetUserId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (!userId) return;
+
+    const myUsername = client.data.userInfo.username || client.data.userInfo.email || 'Anonymous';
+
+    // Accept in DB
+    await this.chatService.acceptFriendRequest(userId, data.targetUserId);
+
+    // Notify target user
+    const targetUser = await this.chatService.getUserById(data.targetUserId);
+    if (targetUser && targetUser.socketId) {
+      console.log(`[FRIEND] Notifying target user ${data.targetUserId} that friend request was accepted.`);
+      this.server.to(targetUser.socketId).emit('friend-request-accepted', {
+        friend: {
+          _id: userId,
+          username: myUsername,
+        },
+      });
+    }
+  }
+
+  @SubscribeMessage('decline-friend-request')
+  async onDeclineFriendRequest(
+    @MessageBody() data: { targetUserId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (!userId) return;
+
+    await this.chatService.declineFriendRequest(userId, data.targetUserId);
+  }
+
+  @SubscribeMessage('reward-completed-call')
+  async onRewardCompletedCall(
+    @MessageBody() data: { callDuration: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (!userId) return;
+
+    if (data.callDuration >= 60) {
+      console.log(`[REWARD] Call duration ${data.callDuration}s >= 60s for user ${userId}. Granting rewards.`);
+      const updatedUser = await this.chatService.addCallReward(userId);
+      if (updatedUser) {
+        client.data.userInfo = updatedUser;
+        client.emit('rewards-updated', {
+          coins: updatedUser.coins,
+          streakCount: updatedUser.streakCount,
+        });
+      }
     }
   }
 

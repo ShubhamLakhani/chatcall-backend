@@ -22,6 +22,18 @@ export class User extends MongoSchema {
   @Prop({ type: Number, default: 100 })
   reputationScore: number;
 
+  @Prop({ type: Number, default: 100 })
+  coins: number;
+
+  @Prop({ type: Number, default: 0 })
+  streakCount: number;
+
+  @Prop({ type: [String], default: [] })
+  friends: string[];
+
+  @Prop({ type: [String], default: [] })
+  friendRequests: string[];
+
   @Prop({ type: String })
   email: string;
 

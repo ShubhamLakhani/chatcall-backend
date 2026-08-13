@@ -6,6 +6,7 @@ export interface AddToQueueOptions {
   moduleType: 'chat' | 'voice-call';
   tags?: string[];
   isShadowbanned?: boolean;
+  username?: string;
 }
 
 export interface FindMatchFilters {
@@ -21,6 +22,7 @@ export interface QueueUserMetadata {
   tags: string[];
   createdAt: number;
   isShadowbanned: boolean;
+  username: string;
 }
 
 @Injectable()
@@ -51,6 +53,7 @@ export class MatchmakingQueueService {
       tags: options.tags || [],
       createdAt: Date.now(),
       isShadowbanned,
+      username: options.username || 'Anonymous',
     };
 
     // Save user metadata in Redis with a 2-hour TTL to prevent memory leaks
@@ -176,11 +179,11 @@ export class MatchmakingQueueService {
     if (candidateId) {
       const generalQueueKey = `${queuePrefix}:general`;
       const matchLuaScript = `
-        local scoreA = redis.call('ZSCORE', KEYS[1], ARGS[1])
-        local scoreB = redis.call('ZSCORE', KEYS[1], ARGS[2])
+        local scoreA = redis.call('ZSCORE', KEYS[1], ARGV[1])
+        local scoreB = redis.call('ZSCORE', KEYS[1], ARGV[2])
         if scoreA and scoreB then
-          redis.call('ZREM', KEYS[1], ARGS[1])
-          redis.call('ZREM', KEYS[1], ARGS[2])
+          redis.call('ZREM', KEYS[1], ARGV[1])
+          redis.call('ZREM', KEYS[1], ARGV[2])
           return 1
         else
           return 0

@@ -132,4 +132,42 @@ export class UserModelService {
   updateUserSocketIdById(id: string, socketId: string): Promise<UpdateResult> {
     return this.userModel.updateOne({ _id: id }, { $set: { socketId } });
   }
+
+  async sendFriendRequest(fromUserId: string, toUserId: string): Promise<UpdateResult> {
+    return this.userModel.updateOne(
+      { _id: toUserId },
+      { $addToSet: { friendRequests: fromUserId } }
+    );
+  }
+
+  async acceptFriendRequest(userId: string, targetUserId: string): Promise<void> {
+    // Add targetUserId to userId's friends list, and remove it from pending requests
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        $addToSet: { friends: targetUserId },
+        $pull: { friendRequests: targetUserId }
+      }
+    );
+    // Add userId to targetUserId's friends list
+    await this.userModel.updateOne(
+      { _id: targetUserId },
+      { $addToSet: { friends: userId } }
+    );
+  }
+
+  async declineFriendRequest(userId: string, targetUserId: string): Promise<UpdateResult> {
+    return this.userModel.updateOne(
+      { _id: userId },
+      { $pull: { friendRequests: targetUserId } }
+    );
+  }
+
+  async addCallReward(userId: string): Promise<User | null> {
+    return this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $inc: { coins: 10, streakCount: 1 } },
+      { new: true }
+    ).exec();
+  }
 }

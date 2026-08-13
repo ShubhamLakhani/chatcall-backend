@@ -196,6 +196,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       // Pre-generate a unique Mongo ObjectId for the chat room
       const chatRoomId = new Types.ObjectId().toString();
 
+      // Ensure both matched users join the Socket.IO room immediately
+      void client.join(chatRoomId);
+      const partnerSocket = this.server.sockets.sockets.get(partnerMeta.socketId);
+      if (partnerSocket) {
+        void partnerSocket.join(chatRoomId);
+      }
+
       // Choose a random icebreaker
       const icebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
 
@@ -508,5 +515,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (!chatRoomId) return;
     const newIcebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
     this.server.to(chatRoomId).emit('new-icebreaker', { icebreaker: newIcebreaker });
+  }
+
+  @SubscribeMessage('join-room')
+  onJoinRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { chatRoomId: string },
+  ) {
+    const { chatRoomId } = data;
+    if (!chatRoomId) return;
+    void client.join(chatRoomId);
+    console.log(`[ROOM] Socket ${client.id} joined room ${chatRoomId}`);
   }
 }

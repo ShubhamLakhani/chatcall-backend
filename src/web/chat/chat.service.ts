@@ -120,4 +120,8 @@ export class ChatService {
   updateUserBySocketIds(socketIds: string[], isMatched: boolean) {
     return this.userModelService.updateUserBySocketIds(socketIds, isMatched);
   }
+
+  getUserById(id: string) {
+    return this.userModelService.finedUserById(id);
+  }
 }

@@ -76,13 +76,35 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.userInfo._id,
         client.id,
       );
+      // Fetch latest user details to get updated flags (e.g. isShadowbanned)
+      const user = await this.chatService.getUserById(client.data.userInfo._id);
+      if (user) {
+        client.data.userInfo = user;
+      }
     }
 
     const userId = client.data.userInfo._id.toString();
+
+    // 1. Sliding-window rate limit check
+    const rateLimitExceeded = await this.matchmakingQueueService.checkRateLimit(userId);
+    if (rateLimitExceeded) {
+      console.warn(`Rate limit exceeded for user ${userId}. Triggering captcha challenge.`);
+      client.emit('captcha-required');
+      return;
+    }
+
     const moduleType = data.moduleType;
     const tags = (data as any).tags || [];
+    const isShadowbanned = client.data.userInfo.isShadowbanned || false;
 
-    // Attempt to find a match instantly from the Redis matchmaking queue
+    // 2. Add user to matchmaking queue (registers their metadata in Redis)
+    await this.matchmakingQueueService.addToQueue(userId, client.id, {
+      moduleType,
+      tags,
+      isShadowbanned,
+    });
+
+    // 3. Attempt to find a match instantly from the Redis matchmaking queue
     const partnerMeta = await this.matchmakingQueueService.findMatch(userId, {
       moduleType,
       tags,
@@ -119,13 +141,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       })();
     } else {
-      // No match found: add user to matchmaking queue and emit waiting event
-      await this.matchmakingQueueService.addToQueue(userId, client.id, {
-        moduleType,
-        tags,
-      });
-
+      // User remains in the queue. Emit waiting event
       client.emit('waiting', 'Waiting for a match...');
+    }
+  }
+
+  @SubscribeMessage('verify-captcha')
+  async onVerifyCaptcha(
+    @MessageBody() data: { token: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (!userId) {
+      return client.emit('verify-captcha-response', { success: false, error: 'User not authenticated' });
+    }
+
+    if (data && data.token) {
+      await this.matchmakingQueueService.clearRateLimit(userId);
+      console.log(`Captcha verified successfully for user: ${userId}`);
+      client.emit('verify-captcha-response', { success: true });
+    } else {
+      client.emit('verify-captcha-response', { success: false, error: 'Invalid token' });
     }
   }
 

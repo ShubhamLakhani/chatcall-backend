@@ -16,6 +16,12 @@ export class User extends MongoSchema {
   @Prop({ type: String, default: ModuleType.chat })
   moduleType: ModuleType;
 
+  @Prop({ type: Boolean, default: false })
+  isShadowbanned: boolean;
+
+  @Prop({ type: Number, default: 100 })
+  reputationScore: number;
+
   @Prop({ type: String })
   email: string;
 

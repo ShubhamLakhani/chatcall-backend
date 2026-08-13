@@ -7,12 +7,18 @@ export interface AddToQueueOptions {
   tags?: string[];
   isShadowbanned?: boolean;
   username?: string;
+  userGender?: 'male' | 'female';
+  userCountry?: string;
+  genderFilter?: 'male' | 'female' | 'all';
+  countryFilter?: string;
 }
 
 export interface FindMatchFilters {
   moduleType: 'chat' | 'voice-call' | 'video-call';
   tags?: string[];
   strictTags?: boolean;
+  genderFilter?: 'male' | 'female' | 'all';
+  countryFilter?: string;
 }
 
 export interface QueueUserMetadata {
@@ -23,6 +29,10 @@ export interface QueueUserMetadata {
   createdAt: number;
   isShadowbanned: boolean;
   username: string;
+  userGender?: 'male' | 'female';
+  userCountry?: string;
+  genderFilter?: 'male' | 'female' | 'all';
+  countryFilter?: string;
 }
 
 @Injectable()
@@ -54,6 +64,10 @@ export class MatchmakingQueueService {
       createdAt: Date.now(),
       isShadowbanned,
       username: options.username || 'Anonymous',
+      userGender: options.userGender,
+      userCountry: options.userCountry,
+      genderFilter: options.genderFilter,
+      countryFilter: options.countryFilter,
     };
 
     // Save user metadata in Redis with a 2-hour TTL to prevent memory leaks
@@ -146,11 +160,17 @@ export class MatchmakingQueueService {
       for (const tag of tagsToCheck) {
         const tagQueueKey = `${queuePrefix}:tag:${tag}`;
         // Fetch candidates sorted by oldest entry first
-        const candidates = await this.redisClient.zrange(tagQueueKey, '0', '10');
+        const candidates = await this.redisClient.zrange(tagQueueKey, '0', '50');
         for (const candId of candidates) {
           if (candId !== userId) {
-            candidateId = candId;
-            break;
+            const candMetaStr = await this.redisClient.get(`user:meta:${candId}`);
+            if (candMetaStr) {
+              const candMeta = JSON.parse(candMetaStr) as QueueUserMetadata;
+              if (this.isCompatible(myMetadata, candMeta)) {
+                candidateId = candId;
+                break;
+              }
+            }
           }
         }
         if (candidateId) {
@@ -163,11 +183,17 @@ export class MatchmakingQueueService {
     // 2. If strictTags is not enabled, fall back to the general queue
     if (!candidateId && !filters.strictTags) {
       const generalQueueKey = `${queuePrefix}:general`;
-      const candidates = await this.redisClient.zrange(generalQueueKey, '0', '10');
+      const candidates = await this.redisClient.zrange(generalQueueKey, '0', '50');
       for (const candId of candidates) {
         if (candId !== userId) {
-          candidateId = candId;
-          break;
+          const candMetaStr = await this.redisClient.get(`user:meta:${candId}`);
+          if (candMetaStr) {
+            const candMeta = JSON.parse(candMetaStr) as QueueUserMetadata;
+            if (this.isCompatible(myMetadata, candMeta)) {
+              candidateId = candId;
+              break;
+            }
+          }
         }
       }
       if (candidateId) {
@@ -285,5 +311,21 @@ export class MatchmakingQueueService {
   async clearRateLimit(userId: string): Promise<void> {
     const key = `rate:find-match:${userId}`;
     await this.redisClient.del(key);
+  }
+
+  private isCompatible(a: QueueUserMetadata, b: QueueUserMetadata): boolean {
+    if (a.genderFilter && a.genderFilter !== 'all') {
+      if (b.userGender && b.userGender !== a.genderFilter) return false;
+    }
+    if (b.genderFilter && b.genderFilter !== 'all') {
+      if (a.userGender && a.userGender !== b.genderFilter) return false;
+    }
+    if (a.countryFilter && a.countryFilter !== '') {
+      if (b.userCountry && b.userCountry !== a.countryFilter) return false;
+    }
+    if (b.countryFilter && b.countryFilter !== '') {
+      if (a.userCountry && a.userCountry !== b.countryFilter) return false;
+    }
+    return true;
   }
 }

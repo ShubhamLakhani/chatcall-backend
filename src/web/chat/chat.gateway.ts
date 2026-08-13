@@ -174,18 +174,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     const fromUsername = client.data.userInfo.username || client.data.userInfo.email || 'Anonymous';
 
+    // Deduct 5 coins if searching using a specific gender or country filter
+    const hasGenderFilter = (data as any).genderFilter && (data as any).genderFilter !== 'all';
+    const hasCountryFilter = (data as any).countryFilter && (data as any).countryFilter !== '';
+    if (hasGenderFilter || hasCountryFilter) {
+      const updatedUser = await this.chatService.deductCoins(userId, 5);
+      if (!updatedUser) {
+        client.emit('insufficient-coins', { message: 'You need at least 5 coins to use match filters.' });
+        return;
+      }
+      client.data.userInfo = updatedUser;
+      client.emit('rewards-updated', {
+        coins: updatedUser.coins,
+        streakCount: updatedUser.streakCount,
+      });
+    }
+
     // 2. Add user to matchmaking queue (registers their metadata in Redis)
     await this.matchmakingQueueService.addToQueue(userId, client.id, {
       moduleType,
       tags,
       isShadowbanned,
       username: fromUsername,
+      userGender: (data as any).userGender,
+      userCountry: (data as any).userCountry,
+      genderFilter: (data as any).genderFilter,
+      countryFilter: (data as any).countryFilter,
     });
 
     // 3. Attempt to find a match instantly from the Redis matchmaking queue
     const partnerMeta = await this.matchmakingQueueService.findMatch(userId, {
       moduleType,
       tags,
+      genderFilter: (data as any).genderFilter,
+      countryFilter: (data as any).countryFilter,
     });
 
     if (partnerMeta) {

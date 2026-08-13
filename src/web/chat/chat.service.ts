@@ -145,4 +145,8 @@ export class ChatService {
   addCallReward(userId: string) {
     return this.userModelService.addCallReward(userId);
   }
+
+  deductCoins(userId: string, amount: number) {
+    return this.userModelService.deductCoins(userId, amount);
+  }
 }

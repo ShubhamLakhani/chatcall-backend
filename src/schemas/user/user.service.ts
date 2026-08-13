@@ -173,4 +173,12 @@ export class UserModelService {
       { new: true }
     ).exec();
   }
+
+  async deductCoins(userId: string, amount: number): Promise<User | null> {
+    return this.userModel.findOneAndUpdate(
+      { _id: userId, coins: { $gte: amount } },
+      { $inc: { coins: -amount } },
+      { new: true }
+    ).exec();
+  }
 }

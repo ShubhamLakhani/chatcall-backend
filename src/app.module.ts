@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WebModule } from './web/web.module';
+import { RedisModule } from './common/redis/redis.module';
 
 @Module({
   imports: [
@@ -18,8 +19,10 @@ import { WebModule } from './web/web.module';
       inject: [ConfigService],
     }),
     WebModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+

@@ -27,6 +27,26 @@ export class ChatRoomModelService {
     });
   }
 
+  async createChatRoomWithId(roomId: string, user1: string, user2: string): Promise<ChatRoom> {
+    const filter = {
+      $or: [
+        { user1, user2 },
+        { user1: user2, user2: user1 },
+      ],
+    };
+
+    const update = {
+      $setOnInsert: { _id: roomId },
+      $set: { user1, user2 },
+    };
+
+    return this.chatRoomModel.findOneAndUpdate(filter, update, {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    });
+  }
+
   findChatRoomById(chatRoomId: string): Promise<ChatRoom | null> {
     return this.chatRoomModel.findById(chatRoomId);
   }

@@ -11,6 +11,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { User } from 'src/schemas/user/user.schema';
 import { ChatService } from './chat.service';
+import { MatchmakingQueueService } from 'src/common/redis/matchmaking-queue.service';
+import { Types } from 'mongoose';
 
 @WebSocketGateway({ cors: {
   origin: ['*'], // or same exact ngrok domain
@@ -20,8 +22,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly matchmakingQueueService: MatchmakingQueueService,
+  ) {}
   private matchedUsers = new Set<string>();
+  private roomReady = new Map<string, Set<string>>();
 
   handleConnection(socket: Socket) {
     console.log(`Connected: ${socket.id}`);
@@ -31,8 +37,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleDisconnect(socket: Socket) {
     this.matchedUsers.delete(socket.id);
     console.log(`Disconnected: ${socket.id}`);
+
+    // Remove user from matchmaking queue immediately on disconnect
+    const userId = socket.data?.userInfo?._id?.toString();
+    if (userId) {
+      await this.matchmakingQueueService.removeFromQueue(userId);
+    }
+
     await this.chatService.updateUserBySocketId(socket.id);
     // await this.chatService.removeUser(socket.id);
+
+    // Clean up roomReady map
+    for (const [roomId, readyUsers] of this.roomReady.entries()) {
+      if (readyUsers.has(socket.id)) {
+        readyUsers.delete(socket.id);
+        if (readyUsers.size === 0) {
+          this.roomReady.delete(roomId);
+        }
+      }
+    }
   }
 
   @SubscribeMessage('find-match')
@@ -55,48 +78,65 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
     }
 
-    const tryMatch = async () => {
-      const room = await this.chatService.findMatch(client.id, data);
-      if (room) {
-        this.matchedUsers.add(room.user1);
-        this.matchedUsers.add(room.user2);
-        client.emit('matched', { chatRoomId: room._id, initiator: true, moduleType: data.moduleType });
-        const partnerId = room.user1 === client.id ? room.user2 : room.user1;
-        client.to(partnerId).emit('matched', { chatRoomId: room._id, initiator: false, moduleType: data.moduleType });
-        return true;
-      }
-      return false;
-    };
+    const userId = client.data.userInfo._id.toString();
+    const moduleType = data.moduleType;
+    const tags = (data as any).tags || [];
 
-    if (await tryMatch()) return;
+    // Attempt to find a match instantly from the Redis matchmaking queue
+    const partnerMeta = await this.matchmakingQueueService.findMatch(userId, {
+      moduleType,
+      tags,
+    });
 
-    client.emit('waiting', 'Waiting for a match...');
+    if (partnerMeta) {
+      // Match found!
+      this.matchedUsers.add(client.id);
+      this.matchedUsers.add(partnerMeta.socketId);
 
-    // Start polling every 20s until matched or disconnected
-    // const intervalId = setInterval(() => {
-    //   void (async () => {
-    //     const matched = await tryMatch();
-    //     if (matched) {
-    //       clearInterval(intervalId);
-    //     } else {
-    //       client.emit('waiting', 'Waiting for a match...');
-    //     }
-    //   })();
-    // }, 200);
-    let matched = false;
-    const checkInterval = 10000; // 10 seconds interval to check for a match
-    while (!matched && client.connected && !this.matchedUsers.has(client.id)) {
-      matched = await tryMatch();
-      if (!matched) {
-        client.emit('waiting', 'Waiting for a match...');
-        await new Promise((resolve) => setTimeout(resolve, checkInterval));
-      }
+      // Pre-generate a unique Mongo ObjectId for the chat room
+      const chatRoomId = new Types.ObjectId().toString();
+
+      // Instantly emit matched event to both users
+      client.emit('matched', { chatRoomId, initiator: true, moduleType });
+      client.to(partnerMeta.socketId).emit('matched', { chatRoomId, initiator: false, moduleType });
+
+      // Perform MongoDB writes asynchronously in the background
+      void (async () => {
+        try {
+          // Update user matched status in MongoDB
+          await this.chatService.updateUserBySocketIds(
+            [client.id, partnerMeta.socketId],
+            true,
+          );
+          // Create ChatRoom document in MongoDB
+          await this.chatService.createChatRoomWithId(
+            chatRoomId,
+            client.id,
+            partnerMeta.socketId,
+          );
+        } catch (error) {
+          console.error('Failed to asynchronously initialize match in MongoDB:', error);
+        }
+      })();
+    } else {
+      // No match found: add user to matchmaking queue and emit waiting event
+      await this.matchmakingQueueService.addToQueue(userId, client.id, {
+        moduleType,
+        tags,
+      });
+
+      client.emit('waiting', 'Waiting for a match...');
     }
+  }
 
-    // Clean up if user disconnects
-    // client.once('disconnect', () => {
-    //   clearInterval(intervalId);
-    // });
+  @SubscribeMessage('cancel-search')
+  async onCancelSearch(@ConnectedSocket() client: Socket) {
+    const userId = client.data?.userInfo?._id?.toString();
+    if (userId) {
+      await this.matchmakingQueueService.removeFromQueue(userId);
+      console.log(`Matchmaking search cancelled for user: ${userId}`);
+      client.emit('search-cancelled', { success: true });
+    }
   }
 
   @SubscribeMessage('send-message')
@@ -160,13 +200,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
   ) {
     console.log('start-call', data);
-    const receiver = await this.chatService.getReceiver(
-      client.id,
-      data.chatRoomId,
-    );
-    console.log('receiver', receiver);
-    if (receiver) {
-      this.server.to(receiver).emit('call-started', { from: client.id });
+    const { chatRoomId } = data;
+    if (!chatRoomId) return;
+
+    let readyUsers = this.roomReady.get(chatRoomId);
+    if (!readyUsers) {
+      readyUsers = new Set<string>();
+      this.roomReady.set(chatRoomId, readyUsers);
+    }
+    readyUsers.add(client.id);
+
+    console.log(`Room ${chatRoomId} readiness: ${readyUsers.size}/2`);
+
+    if (readyUsers.size === 2) {
+      const [user1, user2] = Array.from(readyUsers);
+      this.server.to(user1).emit('call-started', { from: user2 });
+      this.server.to(user2).emit('call-started', { from: user1 });
+      this.roomReady.delete(chatRoomId);
+      console.log(`Room ${chatRoomId} is fully synchronized. call-started emitted.`);
     }
   }
 
@@ -206,6 +257,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { chatRoomId: string },
     @ConnectedSocket() client: Socket,
   ) {
+    this.roomReady.delete(data.chatRoomId);
     const roomData = await this.chatService.leaveRoom(client, data.chatRoomId);
     this.matchedUsers.delete(roomData?.data?.user1 as string);
     this.matchedUsers.delete(roomData?.data?.user2 as string);

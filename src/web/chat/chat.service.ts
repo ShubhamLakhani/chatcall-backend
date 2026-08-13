@@ -112,4 +112,12 @@ export class ChatService {
   updateUserSockedIdById(id: string, socketId: string) {
     return this.userModelService.updateUserSocketIdById(id, socketId);
   }
+
+  createChatRoomWithId(roomId: string, user1: string, user2: string) {
+    return this.chatRoomModelService.createChatRoomWithId(roomId, user1, user2);
+  }
+
+  updateUserBySocketIds(socketIds: string[], isMatched: boolean) {
+    return this.userModelService.updateUserBySocketIds(socketIds, isMatched);
+  }
 }

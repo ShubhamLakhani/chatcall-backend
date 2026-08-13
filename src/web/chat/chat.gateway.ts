@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -18,7 +18,7 @@ import { Types } from 'mongoose';
   origin: ['*'], // or same exact ngrok domain
   credentials: true,
 }, })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer()
   server: Server;
 
@@ -29,14 +29,61 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private matchedUsers = new Set<string>();
   private roomReady = new Map<string, Set<string>>();
 
-  handleConnection(socket: Socket) {
+  async afterInit(server: Server) {
+    try {
+      const redis = this.matchmakingQueueService.redisClient;
+      await redis.del('online:sockets');
+      console.log('Cleared stale online socket lists from Redis.');
+    } catch (err) {
+      console.error('Failed to clear online sockets on boot:', err);
+    }
+
+    // Periodically broadcast activity metrics
+    setInterval(() => {
+      void this.broadcastActivityMetrics();
+    }, 5000);
+  }
+
+  async broadcastActivityMetrics() {
+    try {
+      const redis = this.matchmakingQueueService.redisClient;
+      const totalOnline = (await redis.scard('online:sockets')) || 0;
+
+      const searchingChat = (await redis.zcard('queue:chat:general')) || 0;
+      const searchingVoice = (await redis.zcard('queue:voice-call:general')) || 0;
+      const searchingCount = searchingChat + searchingVoice;
+
+      this.server.emit('live-users-count', {
+        totalOnline: totalOnline > 0 ? totalOnline : this.server.sockets.sockets.size,
+        searchingCount,
+      });
+    } catch (err) {
+      console.error('Failed to broadcast activity metrics:', err);
+    }
+  }
+
+  async handleConnection(socket: Socket) {
     console.log(`Connected: ${socket.id}`);
-    // await this.chatService.registerUser(socket.id);
+    try {
+      const redis = this.matchmakingQueueService.redisClient;
+      await redis.sadd('online:sockets', socket.id);
+      void this.broadcastActivityMetrics();
+    } catch (err) {
+      console.error('Error tracking socket connection:', err);
+    }
   }
 
   async handleDisconnect(socket: Socket) {
     this.matchedUsers.delete(socket.id);
     console.log(`Disconnected: ${socket.id}`);
+
+    try {
+      const redis = this.matchmakingQueueService.redisClient;
+      await redis.srem('online:sockets', socket.id);
+      void this.broadcastActivityMetrics();
+    } catch (err) {
+      console.error('Error tracking socket disconnection:', err);
+    }
 
     // Remove user from matchmaking queue immediately on disconnect
     const userId = socket.data?.userInfo?._id?.toString();

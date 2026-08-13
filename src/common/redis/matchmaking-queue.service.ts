@@ -27,7 +27,7 @@ export interface QueueUserMetadata {
 export class MatchmakingQueueService {
   private readonly logger = new Logger(MatchmakingQueueService.name);
 
-  private get redisClient(): Redis {
+  public get redisClient(): Redis {
     return this.redisService.getClient();
   }
 

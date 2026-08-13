@@ -92,14 +92,11 @@ export class ChatService {
   }
 
   async createOrUpdateByDeviceId(value: User, client: Socket): Promise<void> {
-    const { deviceId } = value;
-    let userInfo: User | null = null;
-
-    if (!deviceId) {
-      userInfo = await this.userModelService.craeteUser(value);
+    if (!value.deviceId || value.deviceId.trim() === '') {
+      value.deviceId = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     }
 
-    userInfo = await this.userModelService.upsertUser(value);
+    const userInfo = await this.userModelService.upsertUser(value);
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     client.data.userInfo = userInfo;

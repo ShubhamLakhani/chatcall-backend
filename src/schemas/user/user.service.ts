@@ -114,6 +114,9 @@ export class UserModelService {
   }
 
   upsertUser(value: User): Promise<User> {
+    if (!value.deviceId || value.deviceId.trim() === '') {
+      throw new Error('upsertUser requires a valid, non-empty deviceId');
+    }
     return this.userModel.findOneAndUpdate(
       {
         deviceId: value.deviceId,

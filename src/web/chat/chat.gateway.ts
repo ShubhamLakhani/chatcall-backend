@@ -12,6 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { User } from 'src/schemas/user/user.schema';
 import { ChatService } from './chat.service';
 import { MatchmakingQueueService } from 'src/common/redis/matchmaking-queue.service';
+import { UserModelService } from 'src/schemas/user/user.service';
 import { Types } from 'mongoose';
 import { ICEBREAKERS } from 'src/common/constants/icebreakers';
 
@@ -26,6 +27,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   constructor(
     private readonly chatService: ChatService,
     private readonly matchmakingQueueService: MatchmakingQueueService,
+    private readonly userModelService: UserModelService,
   ) {}
   private matchedUsers = new Set<string>();
   private roomReady = new Map<string, Set<string>>();
@@ -529,6 +531,59 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     if (!chatRoomId) return;
     const newIcebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
     this.server.to(chatRoomId).emit('new-icebreaker', { icebreaker: newIcebreaker });
+  }
+
+  @SubscribeMessage('send-gift')
+  async onSendGift(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { chatRoomId: string, giftId: string, giftCost: number, giftEmoji: string, giftName: string }
+  ) {
+    const { chatRoomId, giftId, giftCost, giftEmoji, giftName } = data;
+    if (!chatRoomId || !giftId || !giftCost) return;
+
+    const sender = await this.userModelService.findBySocketId(client.id);
+    if (!sender || sender.coins < giftCost) {
+      client.emit('gift-error', { message: 'Insufficient coins or user not found.' });
+      return;
+    }
+
+    const recipientSocketId = await this.chatService.getReceiver(client.id, chatRoomId);
+    if (!recipientSocketId) {
+      client.emit('gift-error', { message: 'Partner not found.' });
+      return;
+    }
+
+    const recipient = await this.userModelService.findBySocketId(recipientSocketId);
+    if (!recipient) {
+      client.emit('gift-error', { message: 'Recipient profile not found.' });
+      return;
+    }
+
+    if (!sender._id || !recipient._id) {
+      client.emit('gift-error', { message: 'Database identifiers not found.' });
+      return;
+    }
+
+    const updatedBalances = await this.userModelService.transferGiftCoins(
+      sender._id.toString(),
+      recipient._id.toString(),
+      giftCost,
+    );
+    if (!updatedBalances) {
+      client.emit('gift-error', { message: 'Transaction failed.' });
+      return;
+    }
+
+    this.server.to(chatRoomId).emit('receive-gift', {
+      giftId,
+      giftEmoji,
+      giftName,
+      senderName: sender.email ? sender.email.split('@')[0] : 'Anonymous',
+      senderCoins: updatedBalances.senderCoins,
+      recipientCoins: updatedBalances.recipientCoins,
+      senderSocketId: client.id,
+      recipientSocketId
+    });
   }
 
   @SubscribeMessage('join-room')

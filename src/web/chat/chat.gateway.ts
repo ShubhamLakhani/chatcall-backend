@@ -33,10 +33,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async afterInit(server: Server) {
     try {
       const redis = this.matchmakingQueueService.redisClient;
-      await redis.del('online:sockets');
-      console.log('Cleared stale online socket lists from Redis.');
+      await redis.del('online:users');
+      await redis.del('socket:user');
+      console.log('Cleared stale online user hashes from Redis.');
     } catch (err) {
-      console.error('Failed to clear online sockets on boot:', err);
+      console.error('Failed to clear online user metrics on boot:', err);
     }
 
     // Periodically broadcast activity metrics
@@ -48,7 +49,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async broadcastActivityMetrics() {
     try {
       const redis = this.matchmakingQueueService.redisClient;
-      const totalOnline = (await redis.scard('online:sockets')) || 0;
+      const totalOnline = (await redis.hlen('online:users')) || 0;
 
       const searchingChat = (await redis.zcard('queue:chat:general')) || 0;
       const searchingVoice = (await redis.zcard('queue:voice-call:general')) || 0;
@@ -66,8 +67,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async handleConnection(socket: Socket) {
     console.log(`Connected: ${socket.id}`);
     try {
-      const redis = this.matchmakingQueueService.redisClient;
-      await redis.sadd('online:sockets', socket.id);
+      let deviceId = socket.handshake.query?.deviceId as string;
+      if (!deviceId || deviceId.trim() === '') {
+        console.warn(`[SOCKET] Connection handshake query is missing deviceId for socket ${socket.id}. Falling back to socket.id.`);
+        deviceId = socket.id;
+      }
+
+      const userInfo = await this.chatService.resolveUserByDeviceId(deviceId);
+      socket.data.userInfo = userInfo;
+      const userId = userInfo._id ? userInfo._id.toString() : '';
+
+      if (userId) {
+        const redis = this.matchmakingQueueService.redisClient;
+        await redis.hincrby('online:users', userId, 1);
+        await redis.hset('socket:user', socket.id, userId);
+      }
+
       void this.broadcastActivityMetrics();
     } catch (err) {
       console.error('Error tracking socket connection:', err);
@@ -80,7 +95,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
     try {
       const redis = this.matchmakingQueueService.redisClient;
-      await redis.srem('online:sockets', socket.id);
+      let userId = socket.data?.userInfo?._id?.toString();
+      if (!userId) {
+        userId = (await redis.hget('socket:user', socket.id)) || undefined;
+      }
+
+      if (userId) {
+        const count = await redis.hincrby('online:users', userId, -1);
+        if (count <= 0) {
+          await redis.hdel('online:users', userId);
+        }
+        await redis.hdel('socket:user', socket.id);
+      }
+
       void this.broadcastActivityMetrics();
     } catch (err) {
       console.error('Error tracking socket disconnection:', err);

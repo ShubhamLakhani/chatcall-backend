@@ -102,6 +102,14 @@ export class ChatService {
     client.data.userInfo = userInfo;
   }
 
+  async resolveUserByDeviceId(deviceId: string): Promise<User> {
+    const value = {
+      deviceId,
+      moduleType: 'chat',
+    } as User;
+    return this.userModelService.upsertUser(value);
+  }
+
   updateUserBySocketId(socketId: string) {
     return this.userModelService.updateUserSocketBySocketId(socketId, false);
   }

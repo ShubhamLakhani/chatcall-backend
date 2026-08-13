@@ -3,14 +3,14 @@ import { RedisService } from './redis.service';
 import Redis from 'ioredis';
 
 export interface AddToQueueOptions {
-  moduleType: 'chat' | 'voice-call';
+  moduleType: 'chat' | 'voice-call' | 'video-call';
   tags?: string[];
   isShadowbanned?: boolean;
   username?: string;
 }
 
 export interface FindMatchFilters {
-  moduleType: 'chat' | 'voice-call';
+  moduleType: 'chat' | 'voice-call' | 'video-call';
   tags?: string[];
   strictTags?: boolean;
 }
@@ -18,7 +18,7 @@ export interface FindMatchFilters {
 export interface QueueUserMetadata {
   userId: string;
   socketId: string;
-  moduleType: 'chat' | 'voice-call';
+  moduleType: 'chat' | 'voice-call' | 'video-call';
   tags: string[];
   createdAt: number;
   isShadowbanned: boolean;
@@ -243,7 +243,7 @@ export class MatchmakingQueueService {
   /**
    * Helper to pop the oldest user from the general queue using zpopmin.
    */
-  async popOldest(moduleType: 'chat' | 'voice-call'): Promise<string | null> {
+  async popOldest(moduleType: 'chat' | 'voice-call' | 'video-call'): Promise<string | null> {
     const generalQueueKey = `queue:${moduleType}:general`;
     const result = await this.redisClient.zpopmin(generalQueueKey);
     if (!result || result.length === 0) return null;

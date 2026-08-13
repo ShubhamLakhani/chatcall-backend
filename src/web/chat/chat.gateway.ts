@@ -499,4 +499,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       data: null,
     });
   }
+
+  @SubscribeMessage('request-new-icebreaker')
+  onRequestNewIcebreaker(
+    @MessageBody() data: { chatRoomId: string },
+  ) {
+    const { chatRoomId } = data;
+    if (!chatRoomId) return;
+    const newIcebreaker = ICEBREAKERS[Math.floor(Math.random() * ICEBREAKERS.length)];
+    this.server.to(chatRoomId).emit('new-icebreaker', { icebreaker: newIcebreaker });
+  }
 }

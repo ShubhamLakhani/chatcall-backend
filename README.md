@@ -1,76 +1,95 @@
-# Cashual Call (Backend) ⚙️🔌
+# PulseRoom
 
-> The scalable real-time matchmaking engine and signaling gateway for Cashual Call.
+> Next-Generation Real-Time Anonymous Video, Voice & Text Matchmaking Platform.
 
-[![NestJS](https://img.shields.io/badge/NestJS-11.0-red?style=flat-square&logo=nestjs)](https://nestjs.com)
-[![Mongoose](https://img.shields.io/badge/Mongoose-8.13-green?style=flat-square&logo=mongodb)](https://mongoosejs.com)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-010101?style=flat-square&logo=socket.io)](https://socket.io)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
-[![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat-square&logo=swagger)](https://swagger.io)
+PulseRoom is a premium, real-time anonymous matchmaking application that enables seamless connection via text chat, voice calls, and video streams. 
 
 ---
 
-## 🌟 Key Features
+## ⚡ Key Features
 
-*   **⚡ WebSocket Matchmaking Engine**: Places waiting users into a matchmaking pool and pairs them based on platform type (`chat` vs `voice-call`), verifying block relationships.
-*   **🎙️ WebRTC Signaling Gateways**: Broadcasts connection offers, SDP descriptions, and ICE candidates between matched calls.
-*   **💬 Persistent Chat Handling**: Stores and processes real-time text chats with built-in delivery statuses, seen flags, and read time logging.
-*   **🛡️ Multi-Tier User Protection**: Provides robust mechanisms for checking block statuses and handling user reporting.
-*   **🔒 Secure Identity & Access**: Fully custom user registration and authentication endpoints using `bcrypt` and JWT keys.
-
----
-
-## 🏗️ Technical Highlights & Architecture
-
-The backend is built as a progressive **NestJS** application leveraging structured dependency injection:
-
-*   **Matchmaking Aggregation Pipeline**: Employs a complex MongoDB aggregation query to match candidates. The pipeline queries the `blockedusers` collection, filters out candidates that block the requester or are blocked by them, and selects a random candidate (`$sample: { size: 1 }`).
-*   **WebSocket Event Broker**: Uses modular socket gateways (`ChatGateway`, `BlockedUserGateway`, `ReportUserGateway`) that bind decorators directly to socket instances.
-*   **Auto-Documentation**: Auto-generates comprehensive OpenAPI documentation using `@nestjs/swagger`, accessible at `/api-docs`.
+- **💬/🎙️/📹 Multi-Mode Matchmaking**: Start instant anonymous text chats, voice calls (with active audio visualizers), or high-definition video calls with picture-in-picture stream preview panels.
+- **⚡ Sub-10ms Matchmaking Queue**: Powered by Redis Sorted Sets (`zadd`, `zpopmin`, Lua script evaluations) and Socket.IO cluster adapter state sharing across nodes.
+- **⏭️ Fast Skipping & Keybindings**: Spacebar or Right Arrow keyboard keypresses (and mobile touch swiping) trigger instant leave-room and find-match actions without leaving views.
+- **🧊 Interactive Icebreakers**: A curated dataset of 30+ conversation starter prompts synced across peer matches with real-time "Shuffle 🎲" buttons.
+- **🛡️ Anti-Abuse Moderation**: Sliding-window rate limiters (5 attempts / 10s), shadowbanning queues (`queue:<moduleType>:shadowban`), and sliding-puzzle CAPTCHAs.
+- **🪙 Rewards & Friends**: Daily streaks (🔥), coin rewards (🪙) for calls exceeding 60s, and standard in-call friend requests.
+- **💬 In-Call Chat Overlay**: Slide-in glassmorphic chat drawers for texting directly during active voice/video calls.
+- **🔑 Google OAuth 2.0 & JWT**: Stateless token credentials supporting email logins and free Google OAuth SSO.
+- **🎨 Dark Glassmorphism Design**: Custom slate layout interfaces with Tailwind CSS, backdrop filters, and radial glow accents.
 
 ---
 
-## ⚙️ Local Setup Instructions
+## 🛠️ Technology Stack
 
-### Prerequisites
-*   Node.js (v18.x or later)
-*   npm (v10.x or later)
-*   MongoDB Instance (local server or Atlas cluster)
-
-### Step-by-Step Installation
-1.  **Clone the repository** and navigate to the project directory:
-    ```bash
-    cd chatcall-backend
-    ```
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
-3.  **Configure environment variables**:
-    Create a `.env` file in the root of the project (copying from `.env.example`):
-    ```bash
-    cp .env.example .env
-    ```
-4.  **Run the development server**:
-    ```bash
-    npm run start:dev
-    ```
-5.  Access the API documentation at [http://localhost:3001/api-docs](http://localhost:3001/api-docs).
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend Client** | Next.js 15, React, Redux Toolkit, WebRTC API, Tailwind CSS, Lucide icons |
+| **Backend API** | NestJS, Socket.IO, MongoDB (Mongoose), Redis (IORedis), JWT Auth |
+| **Infrastructure** | Socket.IO Redis adapter, WebRTC ICE/STUN/TURN configurations |
 
 ---
 
-## 🔌 Environment Variables
+## 📁 Repository Architecture Overview
 
-```env
-# Port number the server will listen on
-PORT=3001
-
-# MongoDB Atlas connection string
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/chat-app
-
-# JWT Sign/Verification secret key
-JWT_SECRET=your-secret-key
-
-# Client CORS URL
-CORS_ORIGIN=http://localhost:3000
+### Backend Architecture (`chatcall-backend`)
 ```
+src/
+├── common/
+│   ├── constants/        # Icebreaker questions, metadata
+│   ├── filters/          # Exception mapping filters
+│   └── redis/            # Redis client & matchmaking queues
+├── enums/                # Chat, ModuleType schemas
+├── schemas/              # MongoDB model schemas (User, Message, Blocked)
+├── web/
+│   ├── auth/             # REST Auth & Google OAuth callback controllers
+│   ├── chat/             # Socket.IO Gateway & ChatRoom logic
+│   └── webrtc/           # ICE/TURN credentials endpoints
+└── main.ts               # Server entry point & RedisIoAdapter initialization
+```
+
+### Frontend Architecture (`chatcall-frontend`)
+```
+src/
+├── app/                  # App Router views (Home, Call, Chat)
+├── components/
+│   ├── auth/             # Dark glass LoginForm & SignupForm
+│   ├── call/             # Call timers, visualizers, PiP videoframes, side chat drawer
+│   └── common/           # Glass headers, Live online counters, Auth modals
+├── context/              # Socket connections & query sync contexts
+├── hooks/                # useWebRTC, fingerprinting, typing indicators, swiping listeners
+├── libs/                 # Axios clients, validations, socket helpers
+└── store/                # Redux Toolkit slice states
+```
+
+---
+
+## 🚀 Local Setup Guide
+
+### 1. Backend Setup
+1. Enter the backend folder:
+   ```bash
+   cd chatcall-backend
+   ```
+2. Copy configuration environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+3. Update `.env` credentials (MongoDB connections, Redis host, Google OAuth Client IDs).
+4. Launch development gateway:
+   ```bash
+   npm install
+   npm run start:dev
+   ```
+
+### 2. Frontend Setup
+1. Enter the frontend folder:
+   ```bash
+   cd chatcall-frontend
+   ```
+2. Launch dev client:
+   ```bash
+   npm install
+   npm run dev
+   ```
+3. Open [http://localhost:3000](http://localhost:3000) in multiple browser tabs to test matchmaking!

@@ -28,6 +28,12 @@ export class User extends MongoSchema {
   @Prop({ type: Number, default: 0 })
   streakCount: number;
 
+  @Prop({ type: Boolean, default: false })
+  isVip: boolean;
+
+  @Prop({ type: Date, default: null })
+  vipExpiresAt: Date | null;
+
   @Prop({ type: [String], default: [] })
   friends: string[];
 

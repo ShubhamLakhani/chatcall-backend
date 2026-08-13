@@ -181,4 +181,37 @@ export class UserModelService {
       { new: true }
     ).exec();
   }
+
+  async addCoins(userId: string, amount: number): Promise<User | null> {
+    return this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $inc: { coins: amount } },
+      { new: true }
+    ).exec();
+  }
+
+  async subscribeVip(userId: string, durationDays: number): Promise<User | null> {
+    const user = await this.userModel.findById(userId);
+    if (!user) return null;
+    if (user.coins < 200) return null;
+
+    const now = new Date();
+    let newExpiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+    if (user.isVip && user.vipExpiresAt && new Date(user.vipExpiresAt).getTime() > now.getTime()) {
+      newExpiresAt = new Date(new Date(user.vipExpiresAt).getTime() + durationDays * 24 * 60 * 60 * 1000);
+    }
+
+    return this.userModel.findOneAndUpdate(
+      { _id: userId, coins: { $gte: 200 } },
+      {
+        $inc: { coins: -200 },
+        $set: {
+          isVip: true,
+          vipExpiresAt: newExpiresAt
+        }
+      },
+      { new: true }
+    ).exec();
+  }
 }

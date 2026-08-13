@@ -381,18 +381,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         receiver,
         content: data.content,
       });
-      if (this.matchedUsers.has(receiver)) {
-        client.to(receiver).emit('receive-message', {
-          content: data.content,
-          sender: client.id,
-        });
-      } else {
-        client.emit('user-leave-room', {
-          success: true,
-          message: 'User left',
-          data: null,
-        });
-      }
+      this.server.to(data.chatRoomId).emit('receive-message', {
+        content: data.content,
+        sender: client.id,
+      });
     }
   }
 

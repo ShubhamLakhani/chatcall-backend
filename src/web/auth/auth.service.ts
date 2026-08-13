@@ -71,4 +71,26 @@ export class AuthService {
       data: { token },
     };
   }
+
+  async googleLogin(email: string): Promise<IResponse<{ token: string }>> {
+    let user = await this.userModelService.findByEmail(email);
+    if (!user) {
+      user = await this.userModelService.create({
+        email,
+        password: "",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "1h" }
+    );
+
+    return {
+      success: true,
+      message: "Google login successful",
+      data: { token },
+    };
+  }
 }

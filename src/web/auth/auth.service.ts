@@ -59,7 +59,7 @@ export class AuthService {
     // Generate a JWT token
     const token = jwt.sign(
       { id: user._id, email: user.email },
-      "your-secret-key",
+      process.env.JWT_SECRET || "your-secret-key",
       {
         expiresIn: "1h",
       }

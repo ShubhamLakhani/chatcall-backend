@@ -214,4 +214,41 @@ export class UserModelService {
       { new: true }
     ).exec();
   }
+
+  async findBySocketId(socketId: string): Promise<User | null> {
+    return this.userModel.findOne({ socketId }).exec();
+  }
+
+  async transferGiftCoins(senderId: string, recipientId: string, giftCost: number): Promise<{ senderCoins: number, recipientCoins: number } | null> {
+    // Deduct coins from sender atomically
+    const sender = await this.userModel.findOneAndUpdate(
+      { _id: senderId, coins: { $gte: giftCost } },
+      { $inc: { coins: -giftCost } },
+      { new: true }
+    ).exec();
+
+    if (!sender) return null;
+
+    // Add 50% of giftCost to recipient atomically
+    const recipientReward = Math.floor(giftCost * 0.5);
+    const recipient = await this.userModel.findOneAndUpdate(
+      { _id: recipientId },
+      { $inc: { coins: recipientReward } },
+      { new: true }
+    ).exec();
+
+    if (!recipient) {
+      // Rollback sender's deduction if recipient update failed
+      await this.userModel.findOneAndUpdate(
+        { _id: senderId },
+        { $inc: { coins: giftCost } }
+      ).exec();
+      return null;
+    }
+
+    return {
+      senderCoins: sender.coins,
+      recipientCoins: recipient.coins,
+    };
+  }
 }
